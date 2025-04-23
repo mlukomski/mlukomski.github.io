@@ -1,0 +1,207 @@
+>>>malloy
+source: data is duckdb.table('lukomskidata.csv') extend {
+  rename: country is column00
+  rename: yr is column01
+  rename: mortalityrate is column02
+  rename: oda is column03
+  rename: fatalities is column04
+  rename: corruption is column05
+  rename: refugees is column06
+  rename: gdppc is column07
+  rename: healthexp is column08
+  rename: log_oda is column09
+  rename: log_gdppc is column10
+  rename: log_healthexp is column11
+  rename: log_oda_fatalities is column12
+  rename: log_refugees is column13
+
+  measure:
+    avg_log_oda is log_oda.avg()
+  measure:
+    avg_mortality is mortalityrate.avg()
+  measure:
+    avg_oda is oda.avg()
+  measure:
+    avg_corruption is corruption.avg()
+  measure:
+    avg_refugees is refugees.avg()
+
+}
+>>>malloy
+// Query to see averages of key variables
+run: data -> {
+  group_by: yr
+  aggregate:
+    avg_mortality
+    avg_oda
+    min_mortality is mortalityrate.min()
+    max_mortality is mortalityrate.max()
+    min_oda is oda.min()
+    max_oda is oda.max()
+}
+>>>malloy
+// Same as above but use log_oda (my regressor)
+run: data -> {
+  group_by: yr
+  aggregate:
+    avg_mortality
+    avg_log_oda
+    min_mortality is mortalityrate.min()
+    max_mortality is mortalityrate.max()
+    min__log_oda is log_oda.min()
+    max__log_oda is log_oda.max()
+}
+>>>malloy
+// Countries receiving most foreign aid by year
+run: data -> {
+    select:
+        country
+        yr
+        oda
+    order_by:
+        oda desc
+    limit: 10
+}
+>>>malloy
+// Countries receiving the least foreign aid by year
+run: data -> {
+    select:
+        country
+        yr
+        oda
+    order_by:
+        oda asc
+    limit: 10
+}
+>>>malloy
+// Variables of interest by level of foreign aid received
+run: data -> {
+  where: yr in (2018, 2020, 2021) and log_oda is not null and mortalityrate is not null
+  group_by: oda_level is case when log_oda < 17 then "Low ODA" when log_oda <= 18 then "Medium ODA" else "High" end
+  aggregate:
+    avg_mortality
+    avg_log_oda
+  nest: country_data is {
+    select:
+      country
+      yr
+      mortalityrate
+      log_oda
+    limit: 5
+  }
+}
+>>>malloy
+// Greatest mortality rate by country
+run: data -> {
+  select:
+    mortalityrate
+    country
+    yr
+  order_by:
+    mortalityrate desc
+  limit: 10
+}
+>>>malloy
+// Lowest mortality rate by country
+run: data -> {
+  select:
+    mortalityrate
+    country
+    yr
+  order_by:
+    mortalityrate asc
+  limit: 10
+}
+>>>malloy
+// Greatest fatalities by Country
+run: data -> {
+  select:
+    fatalities
+    country
+    yr
+  order_by:
+    fatalities desc
+  limit: 10
+}
+>>>malloy
+// Lowest fatalities by Country
+run: data -> {
+  select:
+    fatalities
+    country
+    yr
+  order_by:
+    fatalities asc
+  limit: 10
+}
+>>>malloy
+// Conflict level (fatalities) and the corresponding variables of interest
+run: data -> {
+  group_by:
+    conflict_level is case when fatalities < 100 then 'Low' when fatalities < 1000 then 'Medium' else 'High' end
+  aggregate:
+    avg_mortality
+    avg_log_oda
+  nest: country_data is {
+    select:
+      country
+      log_oda
+      mortalityrate
+    limit: 7
+  }
+}
+>>>malloy
+// bar chart: average mortality and conflict level
+# bar_chart
+run: data -> {
+  group_by: 
+    conflict_intensity is case 
+      when fatalities < 100 then 'Low'
+      when fatalities <= 1000 then 'Medium'
+      else 'High'
+    end
+  aggregate:
+    avg_mortality
+  order_by: conflict_intensity
+}
+>>>malloy
+// bar chart: average foreign aid and conflict level
+# bar_chart
+run: data -> {
+  group_by: 
+    conflict_intensity is case 
+      when fatalities < 100 then 'Low'
+      when fatalities <= 1000 then 'Medium'
+      else 'High'
+    end
+  aggregate:
+    avg_oda
+  order_by: conflict_intensity
+}
+>>>malloy
+// Stats of corruption variable to determine cutoff for high/low corruption
+run: data -> {
+  where: yr = (2018|2020|2021)
+  aggregate:
+    min_corruption is corruption.min()
+    max_corruption is corruption.max()
+    avg_corruption is corruption.avg()
+    total_records is count()
+}
+>>>malloy
+// bar chart: average foreign aid and corruption level
+# bar_chart
+run: data -> {
+  group_by: corruption_level is pick 'High Corruption' when corruption < -0.5 else 'Low Corruption'
+  aggregate:
+    avg_oda
+  order_by: corruption_level
+}
+>>>malloy
+# bar_chart
+run: data -> {
+  group_by: corruption_level is pick 'High Corruption' when corruption < -0.5 else 'Low Corruption'
+  aggregate:
+    avg_refugees
+  order_by: corruption_level
+}
